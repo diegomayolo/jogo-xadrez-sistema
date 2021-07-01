@@ -22,6 +22,7 @@ public class ChessMatch {
 	private boolean check;
 	private boolean checkMate;
 	private ChessPiece enPassantVulnerable;
+	private ChessPiece promoted;
 
 	private List<Piece> piecesOnTheBoard = new ArrayList<>();
 	private List<Piece> capturedPieces = new ArrayList<>();
@@ -53,6 +54,10 @@ public class ChessMatch {
 		return enPassantVulnerable;
 	}
 
+	public ChessPiece getPromoted() {
+		return promoted;
+	}
+
 	public ChessPiece[][] getPieces() {
 		ChessPiece[][] mat = new ChessPiece[board.getRows()][board.getColumns()];
 		for (int i = 0; i < board.getRows(); i++) {
@@ -78,10 +83,20 @@ public class ChessMatch {
 
 		if (testCheck(currentPlayer)) {
 			undoMove(source, target, capturedPiece);
-			throw new ChessException("Você não pode se colocar em xeque");
+			throw new ChessException("You can't put yourself in check");
 		}
 
 		ChessPiece movedPiece = (ChessPiece) board.piece(target);
+
+		// #specialmove promotion
+		promoted = null;
+		if (movedPiece instanceof Pawn) {
+			if ((movedPiece.getColor() == Color.WHITE && target.getRow() == 0)
+					|| (movedPiece.getColor() == Color.BLACK && target.getRow() == 7)) {
+				promoted = (ChessPiece) board.piece(target);
+				promoted = replacePromotedPiece("Q");
+			}
+		}
 
 		check = (testCheck(opponent(currentPlayer))) ? true : false;
 
@@ -90,6 +105,7 @@ public class ChessMatch {
 		} else {
 			nextTurn();
 		}
+
 		// #specialmove en passant
 		if (movedPiece instanceof Pawn
 				&& (target.getRow() == source.getRow() - 2 || target.getRow() == source.getRow() + 2)) {
@@ -99,6 +115,35 @@ public class ChessMatch {
 		}
 
 		return (ChessPiece) capturedPiece;
+	}
+
+	public ChessPiece replacePromotedPiece(String type) {
+		if (promoted == null) {
+			throw new IllegalStateException("There is no piece to be promoted");
+		}
+		if (!type.equals("B") && !type.equals("N") && !type.equals("R") & !type.equals("Q")) {
+			return promoted;
+		}
+
+		Position pos = promoted.getChessPosition().toPosition();
+		Piece p = board.removePiece(pos);
+		piecesOnTheBoard.remove(p);
+
+		ChessPiece newPiece = newPiece(type, promoted.getColor());
+		board.placePiece(newPiece, pos);
+		piecesOnTheBoard.add(newPiece);
+
+		return newPiece;
+	}
+
+	private ChessPiece newPiece(String type, Color color) {
+		if (type.equals("B"))
+			return new Bishop(board, color);
+		if (type.equals("N"))
+			return new Knight(board, color);
+		if (type.equals("Q"))
+			return new Queen(board, color);
+		return new Rook(board, color);
 	}
 
 	private Piece makeMove(Position source, Position target) {
@@ -158,6 +203,7 @@ public class ChessMatch {
 			capturedPieces.remove(capturedPiece);
 			piecesOnTheBoard.add(capturedPiece);
 		}
+
 		// #specialmove castling kingside rook
 		if (p instanceof King && target.getColumn() == source.getColumn() + 2) {
 			Position sourceT = new Position(source.getRow(), source.getColumn() + 3);
@@ -175,7 +221,7 @@ public class ChessMatch {
 			board.placePiece(rook, sourceT);
 			rook.decreaseMoveCount();
 		}
-		
+
 		// #specialmove en passant
 		if (p instanceof Pawn) {
 			if (source.getColumn() != target.getColumn() && capturedPiece == enPassantVulnerable) {
@@ -193,19 +239,19 @@ public class ChessMatch {
 
 	private void validateSourcePosition(Position position) {
 		if (!board.thereIsAPiece(position)) {
-			throw new ChessException("Não existe peça na posição de origem");
+			throw new ChessException("There is no piece on source position");
 		}
 		if (currentPlayer != ((ChessPiece) board.piece(position)).getColor()) {
-			throw new ChessException("A peça escolhida não é sua");
+			throw new ChessException("The chosen piece is not yours");
 		}
 		if (!board.piece(position).isThereAnyPossibleMove()) {
-			throw new ChessException("Não existe movimentos possiveis para a peça escolhida");
+			throw new ChessException("There is no possible moves for the chosen piece");
 		}
 	}
 
 	private void validateTargetPosition(Position source, Position target) {
 		if (!board.piece(source).possibleMove(target)) {
-			throw new ChessException("A peça escolhida não pode se mover para a posição de destino");
+			throw new ChessException("The chosen piece can't move to target position");
 		}
 	}
 
@@ -226,7 +272,7 @@ public class ChessMatch {
 				return (ChessPiece) p;
 			}
 		}
-		throw new IllegalStateException("Não existe o rei " + color + "no tabuleiro");
+		throw new IllegalStateException("There is no " + color + " king on the board");
 	}
 
 	private boolean testCheck(Color color) {
